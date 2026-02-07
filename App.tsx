@@ -6,7 +6,7 @@ import StatCard from './components/StatCard';
 import LogForm from './components/LogForm';
 import SettingsModal from './components/SettingsModal';
 
-type ViewMode = 'dashboard' | 'history';
+type ViewMode = 'dashboard' | 'history' | 'daily';
 
 const App: React.FC = () => {
   const [logs, setLogs] = useState<StudyLog[]>([]);
@@ -15,6 +15,9 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('weekly');
   const [activeView, setActiveView] = useState<ViewMode>('dashboard');
+  
+  // State for Lesson Detail View (Replaces Accordion)
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
 
   // Load data safely
   useEffect(() => {
@@ -32,7 +35,6 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Veri yükleme hatası:", e);
-      // Hata durumunda varsayılanlarla devam et
     }
   }, []);
 
@@ -59,6 +61,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Dashboard Stats
   const stats = useMemo(() => {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
@@ -94,6 +97,129 @@ const App: React.FC = () => {
     };
   }, [logs, timeRange, lessons]);
 
+  // Daily Stats Grouping
+  const dailyGroups = useMemo(() => {
+    const groups: Record<string, { date: string; totalQuestions: number; totalDuration: number }> = {};
+    
+    logs.forEach(log => {
+      if (!groups[log.date]) {
+        groups[log.date] = { date: log.date, totalQuestions: 0, totalDuration: 0 };
+      }
+      groups[log.date].totalQuestions += (log.questionsSolved || 0);
+      groups[log.date].totalDuration += (log.duration || 0);
+    });
+
+    return Object.values(groups).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [logs]);
+
+  // Helper to render lesson detail content
+  const renderLessonDetail = () => {
+    const lesson = lessons.find(l => l.id === selectedLessonId);
+    if (!lesson) return null;
+
+    const lessonLogs = logs.filter(l => l.lessonId === lesson.id);
+
+    // Group by topic
+    const logsByTopic: Record<string, StudyLog[]> = {};
+    lessonLogs.forEach(log => {
+      if (!logsByTopic[log.topic]) logsByTopic[log.topic] = [];
+      logsByTopic[log.topic].push(log);
+    });
+
+    return (
+      <div className="animate-in slide-in-from-right duration-300 pb-20">
+        {/* Detail Header */}
+        <div className="bg-white sticky top-16 z-20 pb-4 pt-2 border-b border-slate-50 mb-4">
+           <button 
+             onClick={() => setSelectedLessonId(null)}
+             className="mb-4 flex items-center gap-2 text-slate-400 hover:text-indigo-600 transition-colors font-bold text-sm"
+           >
+             <i className="fas fa-arrow-left"></i>
+             <span>Derslere Dön</span>
+           </button>
+
+           <div className="flex items-center gap-4">
+              <div className={`w-14 h-14 rounded-2xl ${lesson.color} flex items-center justify-center text-white shadow-lg`}>
+                 <span className="font-bold text-xl">{lesson.name[0]}</span>
+              </div>
+              <div className="flex flex-col justify-center">
+                <h2 className="text-2xl font-black text-slate-800 tracking-tight">{lesson.name}</h2>
+              </div>
+           </div>
+        </div>
+
+        {/* Topics List */}
+        <div className="space-y-6">
+          {Object.keys(logsByTopic).length === 0 ? (
+             <div className="text-center py-10 text-slate-300">
+                <p>Bu ders için henüz kayıt yok.</p>
+             </div>
+          ) : (
+             Object.entries(logsByTopic).map(([topic, topicLogs]) => {
+              const topicTotalQuestions = topicLogs.reduce((acc, curr) => acc + (curr.questionsSolved || 0), 0);
+              const topicTotalDuration = topicLogs.reduce((acc, curr) => acc + (curr.duration || 0), 0);
+              
+              return (
+                <div key={topic} className="space-y-2">
+                  {/* Topic Header with Stats */}
+                  <div className="flex items-center justify-between px-2 bg-white/50 backdrop-blur-sm py-2 sticky top-[165px] z-10">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${lesson.color}`}></div>
+                      <h4 className="text-xs font-black text-slate-600 uppercase tracking-widest">
+                        {topic}
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                       <div className="bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm">
+                         <span className="text-[10px] font-bold text-slate-500">{topicTotalQuestions} Soru</span>
+                       </div>
+                       <div className="bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm">
+                         <span className="text-[10px] font-bold text-slate-400">{topicTotalDuration} dk</span>
+                       </div>
+                    </div>
+                  </div>
+                  
+                  {/* Individual Logs */}
+                  <div className="grid gap-2">
+                    {topicLogs
+                      .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map(log => (
+                      <div key={log.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                         <div className="flex items-center gap-3">
+                           <div className="bg-slate-50 w-10 h-10 rounded-xl flex flex-col items-center justify-center border border-slate-100 text-slate-400">
+                             <span className="text-[10px] font-black text-slate-700">{new Date(log.date).getDate()}</span>
+                             <span className="text-[8px] font-bold uppercase tracking-wide">{new Date(log.date).toLocaleString('tr-TR', {month:'short'})}</span>
+                           </div>
+                           <div className="flex flex-col">
+                             <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-700">{log.questionsSolved} Soru</span>
+                             </div>
+                             <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-medium text-slate-400">{log.duration} dk</span>
+                             </div>
+                           </div>
+                         </div>
+                         <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteLog(log.id);
+                            }}
+                            className="w-8 h-8 flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500 rounded-full transition-all"
+                          >
+                            <i className="fas fa-trash-alt text-xs"></i>
+                          </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFDFF] text-slate-900 pb-24 select-none">
       {/* Header */}
@@ -121,6 +247,8 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6">
+        
+        {/* DASHBOARD VIEW */}
         {activeView === 'dashboard' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             {/* Today Summary */}
@@ -162,66 +290,137 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* DAILY VIEW */}
+        {activeView === 'daily' && (
+           <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300 pb-20">
+             <h2 className="text-xl font-black text-slate-800 mb-2 px-2">Günlük Özet</h2>
+             {dailyGroups.length === 0 ? (
+                <div className="text-center py-20 text-slate-300">
+                  <i className="fas fa-calendar-times text-5xl mb-4"></i>
+                  <p className="font-medium text-sm">Henüz kayıt yok.</p>
+                </div>
+             ) : (
+                <div className="space-y-3">
+                  {dailyGroups.map((dayStat) => {
+                    const dateObj = new Date(dayStat.date);
+                    return (
+                      <div key={dayStat.date} className="bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm flex items-center justify-between">
+                         {/* Date Section */}
+                         <div className="flex items-center gap-4">
+                            <div className="bg-slate-50 w-14 h-14 rounded-2xl flex flex-col items-center justify-center border border-slate-100 text-slate-800">
+                               <span className="text-xl font-black leading-none">{dateObj.getDate()}</span>
+                               <span className="text-[9px] font-bold uppercase text-slate-400 mt-0.5">{dateObj.toLocaleString('tr-TR', {month:'short'})}</span>
+                            </div>
+                            <div>
+                               <p className="text-sm font-bold text-slate-800">{dateObj.toLocaleString('tr-TR', {weekday:'long'})}</p>
+                               <p className="text-[10px] text-slate-400 font-medium">Günlük Toplam</p>
+                            </div>
+                         </div>
+                         
+                         {/* Stats Section */}
+                         <div className="text-right flex items-center gap-5 pr-2">
+                            <div>
+                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Soru</p>
+                               <p className="text-lg font-black text-indigo-600">{dayStat.totalQuestions}</p>
+                            </div>
+                            <div className="w-px h-8 bg-slate-100"></div>
+                            <div>
+                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Süre</p>
+                               <p className="text-lg font-black text-slate-800">{dayStat.totalDuration}<span className="text-[10px] ml-0.5 font-bold text-slate-400">dk</span></p>
+                            </div>
+                         </div>
+                      </div>
+                    )
+                  })}
+                </div>
+             )}
+           </div>
+        )}
+
+        {/* LESSON HISTORY VIEW */}
         {activeView === 'history' && (
-          <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
-            <h2 className="text-xl font-black text-slate-800 mb-4 px-2">Çalışma Geçmişi</h2>
-            {logs.length === 0 ? (
-              <div className="text-center py-20 text-slate-300">
-                <i className="fas fa-ghost text-5xl mb-4"></i>
-                <p className="font-medium text-sm">Henüz kayıt girmedin.</p>
-              </div>
-            ) : (
-              logs.map(log => {
-                const lesson = lessons.find(l => l.id === log.lessonId);
-                return (
-                  <div key={log.id} className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between active:bg-slate-50 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl ${lesson?.color || 'bg-slate-300'} flex items-center justify-center text-white shadow-sm`}>
-                        <span className="font-bold">{lesson?.name?.[0] || '?'}</span>
+          // If a lesson is selected, show detail view
+          selectedLessonId ? (
+            renderLessonDetail()
+          ) : (
+            // Otherwise show list of lessons
+            <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300 pb-20">
+              <h2 className="text-xl font-black text-slate-800 mb-2 px-2">Ders Geçmişi</h2>
+              {logs.length === 0 ? (
+                <div className="text-center py-20 text-slate-300">
+                  <i className="fas fa-ghost text-5xl mb-4"></i>
+                  <p className="font-medium text-sm">Henüz kayıt girmedin.</p>
+                </div>
+              ) : (
+                // Group logs by Lesson
+                lessons
+                  .filter(lesson => logs.some(log => log.lessonId === lesson.id))
+                  .map(lesson => {
+                    return (
+                      <div key={lesson.id} className="bg-white rounded-[1.5rem] border border-slate-100 shadow-sm overflow-hidden transition-all duration-300 active:scale-[0.98]">
+                        
+                        {/* Lesson Card (Navigates to detail) */}
+                        <button 
+                          onClick={() => setSelectedLessonId(lesson.id)}
+                          className="w-full p-4 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-2xl ${lesson.color} flex items-center justify-center text-white shadow-sm`}>
+                               <span className="font-bold text-lg">{lesson.name[0]}</span>
+                            </div>
+                            <div className="text-left">
+                              <h3 className="font-black text-slate-800 text-lg leading-tight">{lesson.name}</h3>
+                            </div>
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+                            <i className="fas fa-chevron-right text-xs"></i>
+                          </div>
+                        </button>
                       </div>
-                      <div className="overflow-hidden">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                          {new Date(log.date).toLocaleDateString('tr-TR', {day:'numeric', month:'short'})}
-                        </p>
-                        <h4 className="font-bold text-slate-800 truncate leading-tight">{lesson?.name || 'Bilinmeyen'}</h4>
-                        <p className="text-xs text-slate-500 truncate">{log.topic}</p>
-                        <div className="flex gap-2 mt-1">
-                          <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{log.questionsSolved} Soru</span>
-                          <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{log.duration} Dakika</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => deleteLog(log.id)}
-                      className="text-slate-200 active:text-rose-500 p-3"
-                    >
-                      <i className="fas fa-trash-alt"></i>
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                    );
+                  })
+              )}
+            </div>
+          )
         )}
       </main>
 
       {/* Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 h-20 px-10 flex items-center justify-around z-50">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 h-20 px-6 flex items-center justify-between z-50">
         <button 
-          onClick={() => setActiveView('dashboard')}
-          className={`flex flex-col items-center gap-1.5 transition-all ${activeView === 'dashboard' ? 'text-indigo-600' : 'text-slate-300'}`}
+          onClick={() => {
+            setActiveView('dashboard');
+            setSelectedLessonId(null);
+          }}
+          className={`flex-1 flex flex-col items-center gap-1.5 transition-all ${activeView === 'dashboard' ? 'text-indigo-600' : 'text-slate-300'}`}
         >
           <div className={`w-1.5 h-1.5 rounded-full mb-0.5 transition-all ${activeView === 'dashboard' ? 'bg-indigo-600 scale-100' : 'bg-transparent scale-0'}`}></div>
           <i className="fas fa-home-alt text-lg"></i>
           <span className="text-[9px] font-black uppercase tracking-widest">Panel</span>
         </button>
+
         <button 
-          onClick={() => setActiveView('history')}
-          className={`flex flex-col items-center gap-1.5 transition-all ${activeView === 'history' ? 'text-indigo-600' : 'text-slate-300'}`}
+          onClick={() => {
+            setActiveView('daily');
+            setSelectedLessonId(null);
+          }}
+          className={`flex-1 flex flex-col items-center gap-1.5 transition-all ${activeView === 'daily' ? 'text-indigo-600' : 'text-slate-300'}`}
+        >
+          <div className={`w-1.5 h-1.5 rounded-full mb-0.5 transition-all ${activeView === 'daily' ? 'bg-indigo-600 scale-100' : 'bg-transparent scale-0'}`}></div>
+          <i className="fas fa-calendar-alt text-lg"></i>
+          <span className="text-[9px] font-black uppercase tracking-widest">Günlük</span>
+        </button>
+
+        <button 
+          onClick={() => {
+            setActiveView('history');
+            setSelectedLessonId(null);
+          }}
+          className={`flex-1 flex flex-col items-center gap-1.5 transition-all ${activeView === 'history' ? 'text-indigo-600' : 'text-slate-300'}`}
         >
           <div className={`w-1.5 h-1.5 rounded-full mb-0.5 transition-all ${activeView === 'history' ? 'bg-indigo-600 scale-100' : 'bg-transparent scale-0'}`}></div>
-          <i className="fas fa-history text-lg"></i>
-          <span className="text-[9px] font-black uppercase tracking-widest">Geçmiş</span>
+          <i className="fas fa-layer-group text-lg"></i>
+          <span className="text-[9px] font-black uppercase tracking-widest">Dersler</span>
         </button>
       </nav>
 

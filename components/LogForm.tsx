@@ -14,8 +14,10 @@ const LogForm: React.FC<LogFormProps> = ({ lessons, onAdd, onClose }) => {
   const [lessonId, setLessonId] = useState(lessons[0].id);
   const [topic, setTopic] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [duration, setDuration] = useState<number>(60);
-  const [questions, setQuestions] = useState<number>(0);
+  
+  // Changed to string to allow empty input without forcing '0'
+  const [duration, setDuration] = useState<string>('60');
+  const [questions, setQuestions] = useState<string>('');
 
   const selectedLesson = lessons.find(l => l.id === lessonId);
 
@@ -30,7 +32,13 @@ const LogForm: React.FC<LogFormProps> = ({ lessons, onAdd, onClose }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic) return;
-    onAdd({ date, lessonId, topic, duration: Number(duration), questionsSolved: Number(questions) });
+    onAdd({ 
+      date, 
+      lessonId, 
+      topic, 
+      duration: Number(duration) || 0, 
+      questionsSolved: Number(questions) || 0 
+    });
     onClose();
   };
 
@@ -83,8 +91,9 @@ const LogForm: React.FC<LogFormProps> = ({ lessons, onAdd, onClose }) => {
                 type="number"
                 inputMode="numeric"
                 value={questions}
-                onChange={(e) => setQuestions(parseInt(e.target.value) || 0)}
-                className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
+                onChange={(e) => setQuestions(e.target.value)}
+                placeholder="0"
+                className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-300"
               />
             </div>
             <div className="space-y-1.5">
@@ -93,8 +102,9 @@ const LogForm: React.FC<LogFormProps> = ({ lessons, onAdd, onClose }) => {
                 type="number"
                 inputMode="numeric"
                 value={duration}
-                onChange={(e) => setDuration(parseInt(e.target.value) || 0)}
-                className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500"
+                onChange={(e) => setDuration(e.target.value)}
+                placeholder="60"
+                className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-300"
               />
             </div>
           </div>

@@ -68,7 +68,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ lessons, setLessons, onCl
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
       <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+        <div className="flex-shrink-0 p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
             Konu Yönetimi
           </h2>
@@ -77,17 +77,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ lessons, setLessons, onCl
           </button>
         </div>
 
-        {/* Lesson Selector */}
-        <div className="p-3 bg-slate-50 border-b border-slate-100 overflow-x-auto no-scrollbar">
-          <div className="flex gap-2">
+        {/* Lesson Selector - Fixed Grid */}
+        <div className="flex-shrink-0 p-3 bg-slate-50 border-b border-slate-100">
+          <div className="grid grid-cols-3 gap-2">
             {lessons.map(l => (
               <button
                 key={l.id}
                 onClick={() => setSelectedLessonId(l.id)}
-                className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap border ${
+                className={`py-3 px-2 rounded-2xl text-[10px] font-bold transition-all border ${
                   selectedLessonId === l.id
-                    ? `${l.color} text-white border-transparent shadow-sm`
-                    : 'bg-white text-slate-400 border-slate-200'
+                    ? `${l.color} text-white border-transparent shadow-sm scale-105`
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 {l.name}
