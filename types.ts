@@ -16,6 +16,17 @@ export interface Lesson {
   topics: string[];
 }
 
+export interface GoalTarget {
+  questions: number;
+}
+
+export interface Goals {
+  daily: GoalTarget;
+  weekly: GoalTarget;
+  monthly: GoalTarget;
+  topicGoals: Record<string, number>; // Key: "lessonId:topicName", Value: Question Target
+}
+
 export type TimeRange = 'daily' | 'weekly' | 'monthly';
 
 export interface DashboardStats {

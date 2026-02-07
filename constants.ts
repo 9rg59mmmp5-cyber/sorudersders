@@ -1,5 +1,12 @@
 
-import { Lesson } from './types';
+import { Lesson, Goals } from './types';
+
+export const DEFAULT_GOALS: Goals = {
+  daily: { questions: 100 },
+  weekly: { questions: 700 },
+  monthly: { questions: 3000 },
+  topicGoals: {}
+};
 
 export const DEFAULT_LESSONS: Lesson[] = [
   {

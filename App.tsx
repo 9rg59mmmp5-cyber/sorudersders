@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { StudyLog, TimeRange, Lesson } from './types';
-import { DEFAULT_LESSONS } from './constants';
+import { StudyLog, TimeRange, Lesson, Goals } from './types';
+import { DEFAULT_LESSONS, DEFAULT_GOALS } from './constants';
 import StatCard from './components/StatCard';
 import LogForm from './components/LogForm';
 import SettingsModal from './components/SettingsModal';
@@ -11,6 +10,7 @@ type ViewMode = 'dashboard' | 'history' | 'daily';
 const App: React.FC = () => {
   const [logs, setLogs] = useState<StudyLog[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>(DEFAULT_LESSONS);
+  const [goals, setGoals] = useState<Goals>(DEFAULT_GOALS);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('weekly');
@@ -19,19 +19,47 @@ const App: React.FC = () => {
   // State for Lesson Detail View (Replaces Accordion)
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
 
-  // Load data safely
+  // Load data safely with strict ID enforcement
   useEffect(() => {
     try {
       const savedLogs = localStorage.getItem('kpss_logs');
       if (savedLogs) {
         const parsed = JSON.parse(savedLogs);
-        if (Array.isArray(parsed)) setLogs(parsed);
+        if (Array.isArray(parsed)) {
+            const seenIds = new Set<string>();
+            const sanitizedLogs = parsed.filter(l => l).map((log: any) => {
+                let id = log.id;
+                // Force unique string IDs
+                if (!id || typeof id !== 'string' || seenIds.has(id)) {
+                    id = `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 5)}`;
+                }
+                seenIds.add(id);
+                
+                return {
+                    ...log,
+                    id
+                };
+            });
+            setLogs(sanitizedLogs);
+        }
       }
 
       const savedLessons = localStorage.getItem('kpss_lessons');
       if (savedLessons) {
         const parsed = JSON.parse(savedLessons);
         if (Array.isArray(parsed) && parsed.length > 0) setLessons(parsed);
+      }
+
+      const savedGoals = localStorage.getItem('kpss_goals');
+      if (savedGoals) {
+        const parsed = JSON.parse(savedGoals);
+        // Ensure structure matches including topicGoals
+        if (parsed.daily && parsed.weekly) {
+             setGoals({
+                 ...DEFAULT_GOALS,
+                 ...parsed
+             });
+        }
       }
     } catch (e) {
       console.error("Veri yükleme hatası:", e);
@@ -47,17 +75,22 @@ const App: React.FC = () => {
     localStorage.setItem('kpss_lessons', JSON.stringify(lessons));
   }, [lessons]);
 
+  useEffect(() => {
+    localStorage.setItem('kpss_goals', JSON.stringify(goals));
+  }, [goals]);
+
   const addLog = (newLog: Omit<StudyLog, 'id'>) => {
     const log: StudyLog = {
       ...newLog,
-      id: Math.random().toString(36).substr(2, 9)
+      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     };
     setLogs([log, ...logs]);
   };
 
   const deleteLog = (id: string) => {
-    if (confirm('Bu kaydı silmek istediğinize emin misiniz?')) {
-      setLogs(logs.filter(l => l.id !== id));
+    // Using simple confirm
+    if (window.confirm('Bu kaydı silmek istediğinize emin misiniz?')) {
+      setLogs((prevLogs) => prevLogs.filter(l => String(l.id) !== String(id)));
     }
   };
 
@@ -96,6 +129,18 @@ const App: React.FC = () => {
       todayTime
     };
   }, [logs, timeRange, lessons]);
+
+  // Goal Calculations
+  const goalStats = useMemo(() => {
+    const currentGoal = goals[timeRange];
+    
+    const questionPct = Math.min(100, Math.round((stats.totalQuestions / (currentGoal.questions || 1)) * 100));
+
+    return {
+      currentGoal,
+      questionPct
+    };
+  }, [stats, goals, timeRange]);
 
   // Daily Stats Grouping
   const dailyGroups = useMemo(() => {
@@ -159,24 +204,40 @@ const App: React.FC = () => {
               const topicTotalQuestions = topicLogs.reduce((acc, curr) => acc + (curr.questionsSolved || 0), 0);
               const topicTotalDuration = topicLogs.reduce((acc, curr) => acc + (curr.duration || 0), 0);
               
+              const topicGoalKey = `${lesson.id}:${topic}`;
+              const topicGoal = goals.topicGoals?.[topicGoalKey] || 0;
+              const goalPct = topicGoal > 0 ? Math.min(100, Math.round((topicTotalQuestions / topicGoal) * 100)) : 0;
+              
               return (
                 <div key={topic} className="space-y-2">
-                  {/* Topic Header with Stats */}
-                  <div className="flex items-center justify-between px-2 bg-white/50 backdrop-blur-sm py-2 sticky top-[165px] z-10">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${lesson.color}`}></div>
-                      <h4 className="text-xs font-black text-slate-600 uppercase tracking-widest">
-                        {topic}
-                      </h4>
+                  {/* Topic Header with Stats - Added pointer-events-none to container and auto to children to allow clicking through empty space */}
+                  <div className="px-2 bg-white/50 backdrop-blur-sm py-2 sticky top-[165px] z-10 flex flex-col gap-1.5 pointer-events-none">
+                    <div className="flex items-center justify-between pointer-events-auto">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${lesson.color}`}></div>
+                          <h4 className="text-xs font-black text-slate-600 uppercase tracking-widest">
+                            {topic}
+                          </h4>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                           <div className="bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm">
+                             <span className="text-[10px] font-bold text-slate-500">{topicTotalQuestions} Soru</span>
+                           </div>
+                           <div className="bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm">
+                             <span className="text-[10px] font-bold text-slate-400">{topicTotalDuration} dk</span>
+                           </div>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                       <div className="bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm">
-                         <span className="text-[10px] font-bold text-slate-500">{topicTotalQuestions} Soru</span>
-                       </div>
-                       <div className="bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm">
-                         <span className="text-[10px] font-bold text-slate-400">{topicTotalDuration} dk</span>
-                       </div>
-                    </div>
+                    
+                    {/* Topic Goal Progress */}
+                    {topicGoal > 0 && (
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex pointer-events-auto">
+                            <div 
+                                className={`h-full ${lesson.color} transition-all duration-500`} 
+                                style={{ width: `${goalPct}%` }}
+                            ></div>
+                        </div>
+                    )}
                   </div>
                   
                   {/* Individual Logs */}
@@ -184,7 +245,7 @@ const App: React.FC = () => {
                     {topicLogs
                       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                       .map(log => (
-                      <div key={log.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                      <div key={log.id} className="relative flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
                          <div className="flex items-center gap-3">
                            <div className="bg-slate-50 w-10 h-10 rounded-xl flex flex-col items-center justify-center border border-slate-100 text-slate-400">
                              <span className="text-[10px] font-black text-slate-700">{new Date(log.date).getDate()}</span>
@@ -200,13 +261,16 @@ const App: React.FC = () => {
                            </div>
                          </div>
                          <button 
+                            type="button"
                             onClick={(e) => {
+                              e.preventDefault();
                               e.stopPropagation();
                               deleteLog(log.id);
                             }}
-                            className="w-8 h-8 flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500 rounded-full transition-all"
+                            className="relative z-20 w-10 h-10 flex items-center justify-center text-slate-400 bg-slate-50 hover:bg-rose-50 hover:text-rose-500 rounded-full transition-all active:scale-90 cursor-pointer shadow-sm border border-transparent hover:border-rose-100"
+                            title="Kaydı Sil"
                           >
-                            <i className="fas fa-trash-alt text-xs"></i>
+                            <i className="fas fa-trash-alt text-sm pointer-events-none"></i>
                           </button>
                       </div>
                     ))}
@@ -224,11 +288,9 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#FDFDFF] text-slate-900 pb-24 select-none">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-            <i className="fas fa-rocket"></i>
-          </div>
-          <h1 className="font-extrabold text-lg tracking-tight text-slate-800">KPSS Takip</h1>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="Soru Takip" className="w-10 h-10 rounded-xl shadow-lg shadow-indigo-100 object-cover" />
+          <h1 className="font-extrabold text-xl tracking-tight text-slate-800">SORU TAKİP</h1>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -277,6 +339,30 @@ const App: React.FC = () => {
                   {range === 'daily' ? 'Gün' : range === 'weekly' ? 'Hafta' : 'Ay'}
                 </button>
               ))}
+            </div>
+
+            {/* Goal Progress Section */}
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
+               <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                 <i className="fas fa-bullseye text-indigo-500"></i>
+                 Hedef Durumu <span className="text-xs font-medium text-slate-400 ml-auto capitalize">{timeRange === 'daily' ? 'Günlük' : timeRange === 'weekly' ? 'Haftalık' : 'Aylık'}</span>
+               </h3>
+               
+               {/* Question Goal */}
+               <div>
+                  <div className="flex justify-between items-end mb-2">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Soru Hedefi</span>
+                    <span className="text-xs font-bold text-slate-700">{stats.totalQuestions} / {goalStats.currentGoal.questions}</span>
+                  </div>
+                  <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-1000 ease-out flex items-center justify-end px-2"
+                      style={{ width: `${goalStats.questionPct}%` }}
+                    >
+                       {goalStats.questionPct > 15 && <span className="text-[9px] font-bold text-white leading-none">{goalStats.questionPct}%</span>}
+                    </div>
+                  </div>
+               </div>
             </div>
 
             {/* Main Stats */}
@@ -425,7 +511,7 @@ const App: React.FC = () => {
       </nav>
 
       {isFormOpen && <LogForm lessons={lessons} onAdd={addLog} onClose={() => setIsFormOpen(false)} />}
-      {isSettingsOpen && <SettingsModal lessons={lessons} setLessons={setLessons} onClose={() => setIsSettingsOpen(false)} />}
+      {isSettingsOpen && <SettingsModal lessons={lessons} setLessons={setLessons} goals={goals} setGoals={setGoals} onClose={() => setIsSettingsOpen(false)} />}
     </div>
   );
 };
