@@ -289,7 +289,7 @@ const App: React.FC = () => {
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Soru Takip" className="w-10 h-10 rounded-xl shadow-lg shadow-indigo-100 object-cover" />
+          <img src="/logo.png" alt="Soru Takip" className="w-10 h-10 rounded-xl shadow-lg shadow-indigo-100 object-cover bg-white" />
           <h1 className="font-extrabold text-xl tracking-tight text-slate-800">SORU TAKİP</h1>
         </div>
         <div className="flex items-center gap-2">
